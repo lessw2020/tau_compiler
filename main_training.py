@@ -55,7 +55,7 @@ logger: logging.Logger = logging.getLogger("main_training")
 
 def setup():
     """we use torchrun for init so no params needed here"""
-    dist.init_process_group()
+    dist.init_process_group("nccl")
     torch.cuda.manual_seed(torch.distributed.get_rank())
     torch.manual_seed(torch.distributed.get_rank())
 
@@ -103,12 +103,26 @@ def compiler_main():
 
     _device = "cuda"
     model.to(_device)
-    model = DDP(model)
+    # model = DDP(model)
+    model = SPMD(
+        model,
+        schema=Schema(
+            mesh=DeviceMesh(_device, torch.arange(world_size)),
+            placements=[Replicate()],
+        ),
+        # input_schemas=kwargs["inp_schemas"] if "inp_schemas" in kwargs else None,
+    )
+
+    # short cut - run fwd bwd directly
+
+    if rank == 0:
+        logger.warning(f"spmd model {model.parameters()=}")
 
     # ---- optimizer ---------
     use_fused_optimizer = cfg.use_fused_optimizer
 
-    optimizer = torch.optim.AdamW(
+    optimizer = None
+    """torch.optim.AdamW(
         model.parameters(),
         lr=cfg.learning_rate,
         weight_decay=cfg.weight_decay,
@@ -118,7 +132,7 @@ def compiler_main():
         logger.warning(
             f"Running with AdamW optimizer, with fusion set to {use_fused_optimizer}"
         )
-
+    """
     # ----- dataset ---------
     dataset = config.get_dataset()
     train_sampler = DistributedSampler(
