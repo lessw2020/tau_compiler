@@ -56,6 +56,8 @@ logger: logging.Logger = logging.getLogger("main_training")
 def setup():
     """we use torchrun for init so no params needed here"""
     dist.init_process_group()
+    torch.cuda.manual_seed(torch.distributed.get_rank())
+    torch.manual_seed(torch.distributed.get_rank())
 
 
 def cleanup(rank):
@@ -66,8 +68,6 @@ def cleanup(rank):
 
 def compiler_main():
     cfg = train_config()
-    torch.cuda.manual_seed(cfg.seed)
-    torch.manual_seed(cfg.seed)
 
     # torchrun specific
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -172,7 +172,7 @@ def compiler_main():
     if local_rank == 0:
         # memory monitor
         memmax.stop()  # stop and display info
-        print(f"{tracking_duration=}, {cfg.total_steps_to_run=}")
+        # print(f"{tracking_duration=}, {cfg.total_steps_to_run=}")
         """if _stats:
         total_loss_curve = _stats["loss"]
         total_acc_curve = _stats["accuracy"]
