@@ -39,6 +39,7 @@ import os
 
 import timm
 from config.vit_config import train_config
+from torch.utils.data import DistributedSampler
 
 
 def setup():
@@ -67,10 +68,31 @@ def compiler_main():
         # time_of_run = get_date_of_run()
 
     # setup_tasks(rank, world_size, cfg)
+    if torch.distributed.is_initialized():
+        torch.cuda.set_device(local_rank)
 
     setup()
     print(f"hello")
     model = timm.create_model("vit_large_patch14_224", pretrained=False)
+
+    if local_rank == 0:
+        print(f"--> {cfg.model_name} built.")
+        num_params = (sum(p.numel() for p in model.parameters())) / 1e6
+        print(f"built model with {num_params}M params")
+
+    dataset = cfg.get_dataset()
+    train_sampler = DistributedSampler(
+        dataset, rank=dist.get_rank(), num_replicas=dist.get_world_size(), shuffle=True
+    )
+
+    # data loader -------------
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=cfg.batch_size_training,
+        num_workers=cfg.num_workers_dataloader,
+        pin_memory=False,
+        sampler=train_sampler,
+    )
 
     cleanup()
 
