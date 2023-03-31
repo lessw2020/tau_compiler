@@ -35,3 +35,45 @@ from torch.testing._internal.distributed._tensor.common_dtensor import (
     DTensorTestBase,
     with_comms as base_with_comms,
 )
+import os
+
+import timm
+from config.vit_config import train_config
+
+
+def setup():
+    """we use torchrun for init so no params needed here"""
+    dist.init_process_group()
+
+
+def cleanup():
+    dist.destroy_process_group()
+
+
+def compiler_main():
+    cfg = train_config()
+    torch.cuda.manual_seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
+
+    # torchrun specific
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+
+    if rank == 0:
+        print(f"--> World Size = {world_size}\n")
+        print(f"--> Device_count = {torch.cuda.device_count()}")
+        print(f"--> running with these defaults {cfg}")
+        # time_of_run = get_date_of_run()
+
+    # setup_tasks(rank, world_size, cfg)
+
+    setup()
+    print(f"hello")
+    model = timm.create_model("vit_large_patch14_224", pretrained=False)
+
+    cleanup()
+
+
+if __name__ == "__main__":
+    compiler_main()
