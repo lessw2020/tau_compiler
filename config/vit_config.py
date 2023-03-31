@@ -27,6 +27,16 @@ class train_config:
     # use synthetic data
     use_synthetic_data: bool = True
 
+    batch_size_training = 24
+    num_workers_dataloader = 2
+
+    label_smoothing_value: float = 0.0
+
+    # optimizer
+    use_fused_optimizer: bool = True
+    learning_rate: float = 8e-4
+    weight_decay: float = 0.002
+
 
 def get_dataset():
     """generate both train and val dataset"""
@@ -53,3 +63,62 @@ class GeneratedDataset(Dataset):
         rand_image = torch.randn(self._input_shape, dtype=self._input_type)
         label = torch.tensor(data=[index % self._num_classes], dtype=torch.int64)
         return rand_image, label
+
+
+def train(
+    model,
+    data_loader,
+    torch_profiler,
+    optimizer,
+    memmax,
+    local_rank,
+    tracking_duration,
+    total_steps_to_run,
+    use_synthetic_data=True,
+    use_label_singular=False,
+):
+    cfg = train_config()
+    label_smoothing_amount = cfg.label_smoothing_value
+    loss_function = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing_amount)
+    t0 = time.perf_counter()
+    for batch_index, (batch) in enumerate(data_loader, start=1):
+        # print(f"{batch=}")
+        if use_synthetic_data:
+            inputs, targets = batch
+        elif use_label_singular:
+            inputs = batch["pixel_values"]
+            targets = batch["label"]
+
+        else:
+            inputs = batch["pixel_values"]
+            targets = batch["labels"]
+
+        inputs, targets = inputs.to(torch.cuda.current_device()), torch.squeeze(
+            targets.to(torch.cuda.current_device()), -1
+        )
+        if optimizer:
+            optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = loss_function(outputs, targets)
+        loss.backward()
+        if optimizer:
+            optimizer.step()
+
+        # update durations and memory tracking
+        if local_rank == 0:
+            mini_batch_time = time.perf_counter() - t0
+            tracking_duration.append(mini_batch_time)
+            if memmax:
+                memmax.update()
+
+        if batch_index % cfg.log_every == 0 and torch.distributed.get_rank() == 0:
+            print(
+                f"step: {batch_index}: time taken for the last {cfg.log_every} steps is {mini_batch_time}, loss is {loss}"
+            )
+
+        # reset timer
+        t0 = time.perf_counter()
+        if torch_profiler is not None:
+            torch_profiler.step()
+        if total_steps_to_run is not None and batch_index > total_steps_to_run:
+            break

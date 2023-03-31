@@ -40,6 +40,10 @@ import os
 import timm
 from config.vit_config import train_config
 from torch.utils.data import DistributedSampler
+import config.vit_config as config
+import logging
+
+logger: logging.Logger = logging.getLogger("main_training")
 
 
 def setup():
@@ -47,7 +51,9 @@ def setup():
     dist.init_process_group()
 
 
-def cleanup():
+def cleanup(rank):
+    dist.barrier()
+    logger.info(f"Goodbye from rank {rank}")
     dist.destroy_process_group()
 
 
@@ -72,15 +78,36 @@ def compiler_main():
         torch.cuda.set_device(local_rank)
 
     setup()
-    print(f"hello")
+
+    logger.info(f"hello - starting model building...")
+
+    # ---- Model building ------
     model = timm.create_model("vit_large_patch14_224", pretrained=False)
 
     if local_rank == 0:
-        print(f"--> {cfg.model_name} built.")
+        logger.info(f" --> {cfg.model_name} built.")
         num_params = (sum(p.numel() for p in model.parameters())) / 1e6
-        print(f"built model with {num_params}M params")
+        logger.info(f" built model with {num_params:0.2f}M params")
 
-    dataset = cfg.get_dataset()
+    _device = "cuda"
+    model.to(_device)
+
+    # ---- optimizer ---------
+    use_fused_optimizer = cfg.use_fused_optimizer
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=cfg.learning_rate,
+        weight_decay=cfg.weight_decay,
+        fused=use_fused_optimizer,
+    )
+    if rank == 0:
+        logger.warning(
+            f"Running with AdamW optimizer, with fusion set to {use_fused_optimizer}"
+        )
+
+    # ----- dataset ---------
+    dataset = config.get_dataset()
     train_sampler = DistributedSampler(
         dataset, rank=dist.get_rank(), num_replicas=dist.get_world_size(), shuffle=True
     )
@@ -94,7 +121,9 @@ def compiler_main():
         sampler=train_sampler,
     )
 
-    cleanup()
+    # ---- training loop ------
+
+    cleanup(rank)
 
 
 if __name__ == "__main__":
