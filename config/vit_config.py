@@ -28,7 +28,11 @@ class train_config:
     use_synthetic_data: bool = True
 
     batch_size_training = 24
+
+    total_steps_to_run: int = 5
+
     num_workers_dataloader = 2
+    print_memory_summary: bool = False
 
     label_smoothing_value: float = 0.0
 

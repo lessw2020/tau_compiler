@@ -43,6 +43,12 @@ from torch.utils.data import DistributedSampler
 import config.vit_config as config
 import logging
 
+import colorama
+from colorama import Fore
+
+colorama.init(autoreset=True)  # reset after every line
+
+
 logger: logging.Logger = logging.getLogger("main_training")
 
 
@@ -122,6 +128,62 @@ def compiler_main():
     )
 
     # ---- training loop ------
+
+    for i in range(cfg.num_epochs):
+        if rank == 0:
+            print(f"Epoch: {i} starting...")
+            if not cfg.use_synthetic_data:
+                assert _stats is not None, "missing stats in main"
+        config.train(
+            model,
+            data_loader,
+            None,
+            optimizer,
+            memmax,
+            local_rank,
+            tracking_duration,
+            total_steps,
+            use_synthetic_data=cfg.use_synthetic_data,
+            use_label_singular=use_label_singular,
+        )
+        if cfg.total_steps_to_run is not None:
+            break
+
+    # memory summary
+    if local_rank == 0:
+        # memory monitor
+        # memmax.stop()  # stop and display info
+        # print(f"{tracking_duration=}, {cfg.total_steps_to_run=}")
+        """if _stats:
+        total_loss_curve = _stats["loss"]
+        total_acc_curve = _stats["accuracy"]
+        for loss, acc in zip(total_loss_curve, total_acc_curve):
+            print(f"{loss=}, {acc=}")
+
+        best_val_acc = 100 * float(max(total_acc_curve))
+        print(Fore.GREEN + f"\n--> Highest Val Accuracy =  {best_val_acc}\n")
+        """
+        if cfg.total_steps_to_run is not None:
+            warmup_steps = cfg.warmup_steps
+            iters_to_avg = tracking_duration[warmup_steps:]
+
+            stable_sum = sum(iters_to_avg)
+            # print(f"len iters_to_avg = {len(iters_to_avg)}")
+            total_steps_measured = cfg.total_steps_to_run - warmup_steps
+            stable_avg = stable_sum / total_steps_measured
+            stable_avg = round(stable_avg, 4)
+            print(
+                Fore.GREEN
+                + f"\n--> Step avg speed based on {total_steps_measured} steps: {stable_avg} seconds"
+            )
+        # print(f"This was run with TensorParallel? = {cfg.use_tp}")
+        print(f"Batch size used = {cfg.batch_size_training}\n")
+
+        print(Fore.LIGHTBLUE_EX + f"\n--> Model Size =  {num_params} M Params\n")
+        if cfg.print_memory_summary:
+            print(
+                f"\nCUDA Memory Summary After Training:\n {torch.cuda.memory_summary()}"
+            )
 
     cleanup(rank)
 
