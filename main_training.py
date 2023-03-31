@@ -79,11 +79,10 @@ def compiler_main():
         print(f"--> running with these defaults {cfg}")
         # time_of_run = get_date_of_run()
 
+    setup()
     # setup_tasks(rank, world_size, cfg)
     if torch.distributed.is_initialized():
         torch.cuda.set_device(local_rank)
-
-    setup()
 
     logger.info(f"hello - starting model building...")
 
@@ -103,6 +102,7 @@ def compiler_main():
 
     _device = "cuda"
     model.to(_device)
+    model = DDP(model)
 
     # ---- optimizer ---------
     use_fused_optimizer = cfg.use_fused_optimizer

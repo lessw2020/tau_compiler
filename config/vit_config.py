@@ -28,7 +28,7 @@ class train_config:
     use_synthetic_data: bool = True
 
     # training
-    batch_size_training = 24
+    batch_size_training = 2
     total_steps_to_run: int = 5
     num_epochs: int = 2
 
@@ -41,6 +41,10 @@ class train_config:
     use_fused_optimizer: bool = True
     learning_rate: float = 8e-4
     weight_decay: float = 0.002
+
+    # monitoring
+    log_every: int = 1
+    warmup_steps: int = 2
 
 
 def get_dataset():
