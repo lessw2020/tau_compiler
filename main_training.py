@@ -42,6 +42,7 @@ from config.vit_config import train_config
 from torch.utils.data import DistributedSampler
 import config.vit_config as config
 import logging
+import performance
 
 import colorama
 from colorama import Fore
@@ -87,10 +88,10 @@ def compiler_main():
     logger.info(f"hello - starting model building...")
 
     # setup memory tracking for perf
-    # if local_rank == 0:
-    #    memmax = performance.Memory_Maximizer()
-    # else:
-    memmax = None
+    if local_rank == 0:
+        memmax = performance.Memory_Maximizer()
+    else:
+        memmax = None
 
     # ---- Model building ------
     model = timm.create_model("vit_large_patch14_224", pretrained=False)
@@ -137,7 +138,7 @@ def compiler_main():
 
     # memory and timing tracking
     if local_rank == 0:
-        # memmax.start()
+        memmax.start()
         # torch.cuda.reset_peak_memory_stats()
         tracking_duration = []
     else:
@@ -156,7 +157,7 @@ def compiler_main():
         config.train(
             model,
             data_loader,
-            None,
+            torch_profiler,
             optimizer,
             memmax,
             local_rank,
@@ -170,8 +171,8 @@ def compiler_main():
     # memory summary
     if local_rank == 0:
         # memory monitor
-        # memmax.stop()  # stop and display info
-        # print(f"{tracking_duration=}, {cfg.total_steps_to_run=}")
+        memmax.stop()  # stop and display info
+        print(f"{tracking_duration=}, {cfg.total_steps_to_run=}")
         """if _stats:
         total_loss_curve = _stats["loss"]
         total_acc_curve = _stats["accuracy"]
