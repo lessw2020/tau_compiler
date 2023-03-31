@@ -87,6 +87,12 @@ def compiler_main():
 
     logger.info(f"hello - starting model building...")
 
+    # setup memory tracking for perf
+    # if local_rank == 0:
+    #    memmax = performance.Memory_Maximizer()
+    # else:
+    memmax = None
+
     # ---- Model building ------
     model = timm.create_model("vit_large_patch14_224", pretrained=False)
 
@@ -129,11 +135,24 @@ def compiler_main():
 
     # ---- training loop ------
 
+    # memory and timing tracking
+    if local_rank == 0:
+        # memmax.start()
+        # torch.cuda.reset_peak_memory_stats()
+        tracking_duration = []
+    else:
+        tracking_duration = None
+
+    torch_profiler = None
+
+    total_steps = None
+    if cfg.total_steps_to_run:
+        total_steps = cfg.total_steps_to_run - 1  # fix off by one for step count
+
     for i in range(cfg.num_epochs):
         if rank == 0:
             print(f"Epoch: {i} starting...")
-            if not cfg.use_synthetic_data:
-                assert _stats is not None, "missing stats in main"
+
         config.train(
             model,
             data_loader,
@@ -144,7 +163,6 @@ def compiler_main():
             tracking_duration,
             total_steps,
             use_synthetic_data=cfg.use_synthetic_data,
-            use_label_singular=use_label_singular,
         )
         if cfg.total_steps_to_run is not None:
             break

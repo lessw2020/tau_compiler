@@ -27,9 +27,10 @@ class train_config:
     # use synthetic data
     use_synthetic_data: bool = True
 
+    # training
     batch_size_training = 24
-
     total_steps_to_run: int = 5
+    num_epochs: int = 2
 
     num_workers_dataloader = 2
     print_memory_summary: bool = False
