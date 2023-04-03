@@ -38,9 +38,11 @@ from torch.testing._internal.distributed._tensor.common_dtensor import (
 import os
 
 import timm
-from config.vit_config import train_config
+
+# from config.vit_config import train_config
+from config.t5_config import train_config
 from torch.utils.data import DistributedSampler
-import config.vit_config as config
+import config.t5_config as config
 import logging
 import performance
 
@@ -94,7 +96,8 @@ def compiler_main():
         memmax = None
 
     # ---- Model building ------
-    model = timm.create_model("vit_large_patch14_224", pretrained=False)
+    # model = timm.create_model("vit_large_patch14_224", pretrained=False)
+    model = config.build_model("t5")
 
     if local_rank == 0:
         logger.info(f" --> {cfg.model_name} built.")
@@ -115,8 +118,8 @@ def compiler_main():
 
     # short cut - run fwd bwd directly
 
-    if rank == 0:
-        logger.warning(f"spmd model {model.parameters()=}")
+    # if rank == 0:
+    #    logger.warning(f"spmd model {model.parameters()=}")
 
     # ---- optimizer ---------
     use_fused_optimizer = cfg.use_fused_optimizer

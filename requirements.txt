@@ -1,2 +1,4 @@
 tqdm
 colorama
+transformers
+datasets
