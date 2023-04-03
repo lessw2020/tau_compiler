@@ -39,12 +39,22 @@ import os
 
 import timm
 
+# benchmarks/dynamo/huggingface.py
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSeq2SeqLM,
+    T5ForConditionalGeneration,
+    T5Config,
+)
+
 # from config.vit_config import train_config
 from config.t5_config import train_config
 from torch.utils.data import DistributedSampler
 import config.t5_config as config
 import logging
 import performance
+
+from typing import Tuple
 
 import colorama
 from colorama import Fore
@@ -53,6 +63,30 @@ colorama.init(autoreset=True)  # reset after every line
 
 
 logger: logging.Logger = logging.getLogger("main_training")
+from torch.utils._pytree import PyTree, tree_flatten, tree_map, tree_map_only
+
+pytree = torch.utils._pytree
+
+# typ = type(pytree)
+# fields = getattr(typ, "_fields", None)
+from dataclasses import fields
+from transformers.modeling_outputs import Seq2SeqLMOutput
+
+
+def _flatten_fn(model_input: Seq2SeqLMOutput) -> Tuple[List[Any], pytree.Context]:
+    return [getattr(model_input, f.name) for f in fields(model_input)], type(
+        model_input
+    )
+
+
+def _unflatten_fn(
+    model_input: List[Any],
+    context: pytree.Context,
+) -> Seq2SeqLMOutput:
+    return context(*model_input)
+
+
+pytree._register_pytree_node(Seq2SeqLMOutput, _flatten_fn, _unflatten_fn)
 
 
 def setup():
